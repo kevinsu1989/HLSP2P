@@ -1,61 +1,62 @@
 
 import io from 'socket.io-client'
+import { logInfo } from './debugger'
 
 export default class Signal {
-    constructor(client, room = 'test', ready = () => { }) {
+    constructor(manager, room = 'test', ready = () => { }) {
         this.socket = io();
-        this.client = client;
+        this.manager = manager;
 
         this.socket.on('connect', () => {
 
             this.socket.emit('join', room);
 
-            this.socket.on('ready', (id, peerList) => {
-                console.log(`join room got id ${id} and ready to go`);
-                console.log(`got peer list : ${peerList.join(',')}`);
+            this.socket.on('ready', (id, peers) => {
+                logInfo(`join room got id ${id} and ready to go`);
+                logInfo(`got peer list : ${peers.join(',')}`);
 
-                ready(id, peerList);
+                ready(id, peers);
 
                 this.socket.on('newPeer', peer => {
-                    client.addPeer(peer);
-                    console.log(`got new peer : ${client.peerList.join(',')}`);
+                    manager.addPeer(peer);
+                    logInfo(`got new peer : ${manager.peers.join(',')}`);
                 })
 
                 this.socket.on('removePeer', peer => {
-                    client.removePeer(peer);
-                    console.log(`peer remove : ${client.peerList.join(',')}`);
+                    manager.removePeer(peer);
+                    logInfo(`peer remove : ${manager.peers.join(',')}`);
                 })
 
                 this.socket.on('receiveCandidate', (peer, candidate) => {
-                    client.peer(peer).addCandidate(candidate);
-                    console.log(`receive candidate from ${peer}`);
+                    manager.peer(peer).addIceCandidate(candidate);
+                    logInfo(`receive candidate from ${peer}`);
                 });
 
                 this.socket.on('receiveOffer', (peer, offer) => {
-                    client.peer(peer).receiveOffer(offer);
-                    console.log(`receive offer from ${peer}`);
+                    manager.peer(peer).receiveOffer(offer);
+                    logInfo(`receive offer from ${peer}`);
                 })
 
                 this.socket.on('receiveAnswer', (peer, answer) => {
-                    client.peer(peer).receiveAnswer(answer);
-                    console.log(`receive answer from ${peer}`);
+                    manager.peer(peer).receiveAnswer(answer);
+                    logInfo(`receive answer from ${peer}`);
                 })
             });
         });
     }
 
     sendCandidate(id, candidate) {
-        console.log(`send candidate to ${id}`);
+        logInfo(`send candidate to ${id}`);
         this.socket.emit('sendCandidate', id, candidate);
     }
 
     sendOffer(id, offer) {
-        console.log(`send offer to ${id}`);
+        logInfo(`send offer to ${id}`);
         this.socket.emit('sendOffer', id, offer);
     }
 
     sendAnswer(id, answer) {
-        console.log(`send answer to ${id}`);
+        logInfo(`send answer to ${id}`);
         this.socket.emit('sendAnswer', id, answer);
     }
 }

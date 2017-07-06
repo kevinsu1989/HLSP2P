@@ -1,37 +1,40 @@
-import Client from './client'
+import Manager from './Manager'
 
 
 (function () {
-    const client = new Client();
+    const client = new Manager();
 
     const renderPeerList = peerList => {
         let peerlistDom = document.querySelectorAll('.peer-list ul')[0];
         peerlistDom.innerHTML = '';
         for (let peer of peerList) {
-
             let peerItem = document.createElement('li');
             let peerLink = document.createElement('a');
             peerLink.innerHTML = peer;
             peerItem.appendChild(peerLink);
 
             peerItem.addEventListener('click', () => {
-                navigator.getUserMedia({ audio: true, video: true }, (stream) => {
-                    client.peer(peer).addStream(stream).sendOffer();
-                }, (err) => {
-                    console.error(err);
-                });
+                client.peer(peer).sendOffer();
             });
+
             peerlistDom.appendChild(peerItem);
         }
     }
 
 
     client.join().ready(function () {
-        renderPeerList(this.peerList);
+        renderPeerList(this.peers);
     }).peerChange(function () {
-        renderPeerList(this.peerList);
+        renderPeerList(this.peers);
+    }).receive(peer => {
+        navigator.getUserMedia({ audio: true, video: true }, (stream) => {
+            peer.addStream(stream);
+        }, (err) => {
+            console.error(err);
+        });
     }).stream((peer, stream) => {
-        let url = URL.createObjectURL(stream);
-        document.getElementById('video').src = url;
+        document.getElementById('video').srcObject = stream;
     });
+
+    window.appClient = client;
 })();

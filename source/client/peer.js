@@ -4,34 +4,33 @@ import {
     IceCandidate as nativeIceCandidate
 } from './native'
 import { iceServers } from './config'
-
-const logError = err => console.error(err);
+import { logError } from './debugger'
+import { EventEmitter2 } from 'eventemitter2'
 
 export default class Peer {
-    constructor(id, socket) {
+    constructor(id, signal) {
         this.id = id;
-        this.socket = socket;
+        this.signal = signal;
+        this.emitter = new EventEmitter2();
 
-
-        this.onAddStream = () => { };
-
-
+        //RTCConnection
         this.connection = new nativePeerConnection({
             iceServers
         });
 
         this.connection.onicecandidate = event => {
             if (!event.candidate) return;
-            this.socket.sendCandidate(this.id, event.candidate);
+            this.signal.sendCandidate(this.id, event.candidate);
         };
 
         this.connection.onaddstream = (event) => {
-            this.onAddStream(event.stream)
+            this.emitter.emit('stream', event.stream);
         };
-    }
+    }    
 
-    stream(onAddStream = () => { }) {
-        this.onAddStream = onAddStream;
+    addIceCandidate(candidate) {
+        let remoteCandidate = new nativeIceCandidate(candidate);
+        this.connection.addIceCandidate(remoteCandidate).catch(logError);
         return this;
     }
 
@@ -40,20 +39,14 @@ export default class Peer {
         return this;
     }
 
-    addCandidate(candidate) {
-        let remoteCandidate = new nativeIceCandidate(candidate);
-        this.connection.addIceCandidate(remoteCandidate);
-        return this;
-    }
-
     /**
      * Send SDP Offer
      */
     sendOffer() {
         if (!this.connection) return this;
-        this.connection.createOffer(offer => {
+        this.connection.createOffer().then(offer => {
             this.connection.setLocalDescription(offer);
-            this.socket.sendOffer(this.id, offer);
+            this.signal.sendOffer(this.id, offer);
         }, logError);
         return this;
     }
@@ -62,9 +55,9 @@ export default class Peer {
     receiveOffer(sdp) {
         if (!this.connection) return this;
         let remoteSessionDescription = new nativeSessionDescription(sdp);
-        this.connection.setRemoteDescription(remoteSessionDescription, () => {
+        this.connection.setRemoteDescription(remoteSessionDescription).then(() => {
             this.sendAnswer();
-        }, logError);
+        }).catch(logError);
         return this;
     }
 
@@ -74,17 +67,30 @@ export default class Peer {
      */
     sendAnswer() {
         if (!this.connection) return this;
-        this.connection.createAnswer(answer => {
+        this.connection.createAnswer().then(answer => {
             this.connection.setLocalDescription(answer);
-            this.socket.sendAnswer(this.id, answer);
-        }, logError);
+            this.signal.sendAnswer(this.id, answer);
+        }).catch(logError);
         return this;
     }
 
     receiveAnswer(sdp) {
         if (!this.connection) return this;
         let remoteSessionDescription = new nativeSessionDescription(sdp);
-        this.connection.setRemoteDescription(remoteSessionDescription, () => { }, logError);
+        this.connection.setRemoteDescription(remoteSessionDescription).catch(logError);
+        return this;
+    }
+
+    hunup() {
+        if (!this.connection) return this;
+        this.connection.close();
+        this.connection = null;
+    }
+
+    //callbacks
+
+    stream(onAddStream = () => { }) {
+        this.emitter.on('stream', onAddStream.bind(this));
         return this;
     }
 }
