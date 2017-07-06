@@ -12,30 +12,51 @@ export default class Peer {
         this.id = id;
         this.signal = signal;
         this.emitter = new EventEmitter2();
+        this.isReady = false;
 
-        //RTCConnection
+        //PeerRTCConnection
         this.connection = new nativePeerConnection({
             iceServers
         });
 
+        //PeerConnection events
         this.connection.onicecandidate = event => {
             if (!event.candidate) return;
             this.signal.sendCandidate(this.id, event.candidate);
         };
 
-        this.connection.onaddstream = (event) => {
-            this.emitter.emit('stream', event.stream);
-        };
-    }    
+        //RTCDataChannel
+        this.datachannel = this.connection.createDataChannel(this.id);
 
+        //RTCDataChannel events
+        this.datachannel.onopen = () => {
+            this.isReady = true;
+            this.emitter.emit('ready');
+        };
+
+        this.datachannel.onmessage = event => {
+            this.emitter.emit('data', event.data);
+        };
+
+        this.datachannel.onclose = () => {
+            this.isReady = false;
+            this.emitter.emit('channelclose');
+        };        
+    }
+
+    send(message) {
+        if ('open' === this.connection.readyState) {
+            this.datachannel.send(message);
+        }
+    }
+
+    /**
+     * add recevied icecandidate
+     * @param {*} candidate 
+     */
     addIceCandidate(candidate) {
         let remoteCandidate = new nativeIceCandidate(candidate);
         this.connection.addIceCandidate(remoteCandidate).catch(logError);
-        return this;
-    }
-
-    addStream(stream) {
-        this.connection.addStream(stream);
         return this;
     }
 
@@ -51,7 +72,10 @@ export default class Peer {
         return this;
     }
 
-
+    /**
+     * Receive Offer from remote
+     * @param {*} sdp 
+     */
     receiveOffer(sdp) {
         if (!this.connection) return this;
         let remoteSessionDescription = new nativeSessionDescription(sdp);
@@ -74,6 +98,10 @@ export default class Peer {
         return this;
     }
 
+    /**
+     * Receive Answer from remote
+     * @param {*} sdp 
+     */
     receiveAnswer(sdp) {
         if (!this.connection) return this;
         let remoteSessionDescription = new nativeSessionDescription(sdp);
@@ -81,16 +109,22 @@ export default class Peer {
         return this;
     }
 
+    /**
+     * close connection
+     */
     hunup() {
         if (!this.connection) return this;
         this.connection.close();
         this.connection = null;
     }
 
-    //callbacks
+    /** callbacks */
+    ready(onReady = () => { }) {
+        this.emitter.once('ready', onReady.bind(this));
+        if (this.isReady) this.emitter.emit('ready');
+    }
 
-    stream(onAddStream = () => { }) {
-        this.emitter.on('stream', onAddStream.bind(this));
-        return this;
+    data(onData = () => { }) {
+        this.emitter.on('data', onData.bind(this));
     }
 }

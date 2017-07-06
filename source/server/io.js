@@ -6,7 +6,7 @@ export default io => {
         socket.on('join', (room) => {
             socket.join(room, () => {
                 io.to(room).clients((err, clients) => {
-                    socket.emit('ready', socket.id, without(clients, socket.id));
+                    socket.emit('ready', without(clients, socket.id));
                     socket.broadcast.emit('newPeer', socket.id);
                 });
             })
