@@ -4,7 +4,7 @@ import {
     IceCandidate as nativeIceCandidate
 } from './native'
 import { iceServers } from './config'
-import { logError } from './debugger'
+import { logInfo, logError } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 
 export default class Peer {
@@ -12,7 +12,7 @@ export default class Peer {
         this.id = id;
         this.signal = signal;
         this.emitter = new EventEmitter2();
-        this.isReady = false;
+        this.isConnected = false;
 
         //PeerRTCConnection
         this.connection = new nativePeerConnection({
@@ -25,36 +25,67 @@ export default class Peer {
             this.signal.sendCandidate(this.id, event.candidate);
         };
 
-        //RTCDataChannel
-        this.datachannel = this.connection.createDataChannel(this.id);
-
-        //RTCDataChannel events
-        this.datachannel.onopen = () => {
-            this.isReady = true;
-            this.emitter.emit('ready');
+        this.connection.ondatachannel = event => {
+            //store the channel
+            this.datachannel = event.channel;
+            this.handleDataChannel();
         };
-
-        this.datachannel.onmessage = event => {
-            this.emitter.emit('data', event.data);
-        };
-
-        this.datachannel.onclose = () => {
-            this.isReady = false;
-            this.emitter.emit('channelclose');
-        };        
     }
 
-    send(message) {
-        if ('open' === this.connection.readyState) {
-            this.datachannel.send(message);
+    /**
+     * Send data to remote
+     * @param {*} data 
+     * @param {*} label 
+     * @param {*} opt 
+     */
+    send(data, label = '*', opt = {}) {
+        let readyState = this.datachannel.readyState;
+        if ('open' === readyState) {
+            this.datachannel.send(JSON.stringify(data));
+        } else {
+            throw new Error('channel not open');
         }
+    }
+
+    /**
+     * create peer datachannel
+     * @param {*} label 
+     * @param {*} opt 
+     */
+    createDataChannel(label = '*', opt = {}) {
+        //RTCDataChannel
+        this.datachannel = this.connection.createDataChannel(this.id);
+        this.handleDataChannel();
+
+        return this.datachannel;
+    }
+
+    /**
+     * set datachannel events
+     * @param {*} datachannel 
+     */
+    handleDataChannel(datachannel) {
+        //RTCDataChannel events
+        this.datachannel.onopen = () => {
+            let readyState = this.datachannel.readyState;
+            this.isConnected = true;
+
+            logInfo(`receive channel[${this.datachannel.id}] state : ${readyState}`);
+            this.emitter('ready');
+        }
+        this.datachannel.onmessage = event => {
+            this.emitter.emit('data', JSON.parse(event.data));
+        }
+        this.datachannel.onclose = () => {
+            this.closeDataChannel();
+        };
     }
 
     /**
      * add recevied icecandidate
      * @param {*} candidate 
      */
-    addIceCandidate(candidate) {
+    receiveIceCandidate(candidate) {
         let remoteCandidate = new nativeIceCandidate(candidate);
         this.connection.addIceCandidate(remoteCandidate).catch(logError);
         return this;
@@ -109,22 +140,33 @@ export default class Peer {
         return this;
     }
 
+    closeDataChannel() {
+        if (!this.datachannel) return;
+        this.datachannel.close();
+        this.datachannel = null;
+        this.emitter.emit('channelclose');
+    }
+
     /**
      * close connection
      */
     hunup() {
-        if (!this.connection) return this;
+        if (!this.connection) return;
+        this.closeDataChannel();
         this.connection.close();
         this.connection = null;
+        this.isConnected = false;
     }
 
     /** callbacks */
     ready(onReady = () => { }) {
-        this.emitter.once('ready', onReady.bind(this));
-        if (this.isReady) this.emitter.emit('ready');
+        this.emitter.once('ready', onReady);
+        if (this.datachannel && this.datachannel.readyState == 'open') this.emitter.emit('ready');
+        return this;
     }
 
     data(onData = () => { }) {
-        this.emitter.on('data', onData.bind(this));
+        this.emitter.on('data', onData);
+        return this;
     }
 }

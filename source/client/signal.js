@@ -4,42 +4,45 @@ import { logInfo } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 
 export default class Signal {
-    constructor(manager, room = 'test') {
+    constructor(
+        path = './',
+        scheduler
+    ) {
         this.socket = io();
-        this.manager = manager;
         this.emitter = new EventEmitter2();
 
         this.socket.on('connect', () => {
 
-            this.socket.emit('join', room);
+            this.socket.emit('join', path);
 
-            this.socket.on('ready', (peers) => {
-                logInfo(`got peer list : ${peers.join(',')}`);
+            this.socket.on('ready', seeds => {
 
-                this.emitter.emit('ready', peers);
+                this.emitter.emit('ready', seeds);
 
-                this.socket.on('newPeer', peer => {
-                    manager.newPeer(peer);
-                    logInfo(`got new peer : ${manager.peers.join(',')}`);
-                })
+                this.socket.on('addSeed', seed => {
+                    scheduler.addSeed(seed);
+                });
 
-                this.socket.on('removePeer', peer => {
-                    manager.removePeer(peer);
-                    logInfo(`peer remove : ${manager.peers.join(',')}`);
+                this.socket.on('removeSeed', id => {
+                    scheduler.removeSeed(id);
+                });
+
+                this.socket.on('updatePart', (id, partName) => {
+                    scheduler.updatePart(id, partName);
                 })
 
                 this.socket.on('receiveCandidate', (peer, candidate) => {
-                    manager.getPeer(peer).addIceCandidate(candidate);
+                    scheduler.getConnectedPeer(peer).receiveIceCandidate(candidate);
                     logInfo(`receive candidate from ${peer}`);
                 });
 
                 this.socket.on('receiveOffer', (peer, offer) => {
-                    manager.getPeer(peer).receiveOffer(offer);
+                    scheduler.getConnectedPeer(peer).receiveOffer(offer);
                     logInfo(`receive offer from ${peer}`);
                 })
 
                 this.socket.on('receiveAnswer', (peer, answer) => {
-                    manager.getPeer(peer).receiveAnswer(answer);
+                    scheduler.getConnectedPeer(peer).receiveAnswer(answer);
                     logInfo(`receive answer from ${peer}`);
                 })
             });
@@ -48,6 +51,10 @@ export default class Signal {
 
     ready(onReady = () => { }) {
         this.emitter.once('ready', onReady);
+    }
+
+    addPart(part) {
+        this.socket.emit('addPart', part);
     }
 
     sendCandidate(id, candidate) {

@@ -1,20 +1,44 @@
 import { without } from 'lodash'
 
+const parts = {};
+
 export default io => {
     io.on('connection', socket => {
 
-        socket.on('join', (room) => {
+        socket.on('join', room => {
+
             socket.join(room, () => {
+
                 io.to(room).clients((err, clients) => {
-                    socket.emit('ready', without(clients, socket.id));
-                    socket.broadcast.emit('newPeer', socket.id);
+                    let othersInroom = without(clients, socket.id);
+
+                    socket.emit('ready', othersInroom.map(other => {
+                        return {
+                            id: other,
+                            parts: parts[other.id] || []
+                        }
+                    }));
+
+                    socket.broadcast.emit('addSeed', {
+                        id: socket.id,
+                        parts: parts[socket.id] || []
+                    });
                 });
-            })
+
+                socket.on('addPart', part => {
+                    parts[socket.id] = parts[socket.id] || [];
+                    if (parts[socket.id].indexOf(part) >= 0) return;
+                    parts[socket.id].push(part);
+                    socket.broadcast.emit('updatePart', socket.id, part);
+                });
+
+                socket.on('disconnect', () => {
+                    socket.broadcast.emit('removeSeed', socket.id);
+                })
+            });
         });
 
-        socket.on('disconnect', () => {
-            socket.broadcast.emit('removePeer', socket.id);
-        })
+
 
         socket.on('sendCandidate', (id, candidate) => {
             socket.to(id).emit('receiveCandidate', socket.id, candidate);
