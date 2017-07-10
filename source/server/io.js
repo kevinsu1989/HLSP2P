@@ -15,7 +15,7 @@ export default io => {
                     socket.emit('ready', othersInroom.map(other => {
                         return {
                             id: other,
-                            parts: parts[other.id] || []
+                            parts: parts[other] || []
                         }
                     }));
 
@@ -33,6 +33,7 @@ export default io => {
                 });
 
                 socket.on('disconnect', () => {
+                    delete parts[socket.id];
                     socket.broadcast.emit('removeSeed', socket.id);
                 })
             });

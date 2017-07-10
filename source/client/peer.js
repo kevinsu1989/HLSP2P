@@ -38,12 +38,12 @@ export default class Peer {
      * @param {*} label 
      * @param {*} opt 
      */
-    send(data, label = '*', opt = {}) {
+    send(data) {
         let readyState = this.datachannel.readyState;
         if ('open' === readyState) {
             this.datachannel.send(JSON.stringify(data));
         } else {
-            throw new Error('channel not open');
+            throw new Error('P2P通道还未打开');
         }
     }
 
@@ -54,7 +54,7 @@ export default class Peer {
      */
     createDataChannel(label = '*', opt = {}) {
         //RTCDataChannel
-        this.datachannel = this.connection.createDataChannel(this.id);
+        this.datachannel = this.connection.createDataChannel(label);
         this.handleDataChannel();
 
         return this.datachannel;
@@ -69,9 +69,7 @@ export default class Peer {
         this.datachannel.onopen = () => {
             let readyState = this.datachannel.readyState;
             this.isConnected = true;
-
-            logInfo(`receive channel[${this.datachannel.id}] state : ${readyState}`);
-            this.emitter('ready');
+            this.emitter.emit('connected');
         }
         this.datachannel.onmessage = event => {
             this.emitter.emit('data', JSON.parse(event.data));
@@ -150,23 +148,11 @@ export default class Peer {
     /**
      * close connection
      */
-    hunup() {
+    close() {
         if (!this.connection) return;
         this.closeDataChannel();
         this.connection.close();
         this.connection = null;
         this.isConnected = false;
-    }
-
-    /** callbacks */
-    ready(onReady = () => { }) {
-        this.emitter.once('ready', onReady);
-        if (this.datachannel && this.datachannel.readyState == 'open') this.emitter.emit('ready');
-        return this;
-    }
-
-    data(onData = () => { }) {
-        this.emitter.on('data', onData);
-        return this;
     }
 }

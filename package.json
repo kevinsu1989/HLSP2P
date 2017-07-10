@@ -4,10 +4,14 @@
   "description": "hls p2p project",
   "main": "build/client/main.js",
   "dependencies": {
+    "blueimp-md5": "^2.7.0",
+    "date-fns": "^1.28.5",
     "eventemitter2": "^4.1.0",
     "express": "^4.15.3",
     "lodash": "^4.17.4",
-    "socket.io": "^2.0.3"
+    "query-string": "^4.3.4",
+    "socket.io": "^2.0.3",
+    "urijs": "^1.18.10"
   },
   "devDependencies": {
     "babel-core": "^6.24.1",

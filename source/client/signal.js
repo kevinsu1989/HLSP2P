@@ -6,7 +6,8 @@ import { EventEmitter2 } from 'eventemitter2'
 export default class Signal {
     constructor(
         path = './',
-        scheduler
+        seedManage,
+        onReady = () => { }
     ) {
         this.socket = io();
         this.emitter = new EventEmitter2();
@@ -16,41 +17,40 @@ export default class Signal {
             this.socket.emit('join', path);
 
             this.socket.on('ready', seeds => {
-
-                this.emitter.emit('ready', seeds);
+                seeds.forEach(function (seed) {
+                    seedManage.addSeed(seed);
+                });
 
                 this.socket.on('addSeed', seed => {
-                    scheduler.addSeed(seed);
+                    seedManage.addSeed(seed);
                 });
 
                 this.socket.on('removeSeed', id => {
-                    scheduler.removeSeed(id);
+                    seedManage.removeSeed(id);
                 });
 
                 this.socket.on('updatePart', (id, partName) => {
-                    scheduler.updatePart(id, partName);
+                    seedManage.updatePart(id, partName);
                 })
 
                 this.socket.on('receiveCandidate', (peer, candidate) => {
-                    scheduler.getConnectedPeer(peer).receiveIceCandidate(candidate);
+                    seedManage.getConnectedPeer(peer).receiveIceCandidate(candidate);
                     logInfo(`receive candidate from ${peer}`);
                 });
 
                 this.socket.on('receiveOffer', (peer, offer) => {
-                    scheduler.getConnectedPeer(peer).receiveOffer(offer);
+                    seedManage.getConnectedPeer(peer).receiveOffer(offer);
                     logInfo(`receive offer from ${peer}`);
                 })
 
                 this.socket.on('receiveAnswer', (peer, answer) => {
-                    scheduler.getConnectedPeer(peer).receiveAnswer(answer);
+                    seedManage.getConnectedPeer(peer).receiveAnswer(answer);
                     logInfo(`receive answer from ${peer}`);
                 })
+
+                this.onReady();
             });
         });
-    }
-
-    ready(onReady = () => { }) {
-        this.emitter.once('ready', onReady);
     }
 
     addPart(part) {
