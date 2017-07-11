@@ -48,7 +48,7 @@ export default class Signal {
                     logInfo(`receive answer from ${peer}`);
                 })
 
-                this.onReady();
+                onReady();
             });
         });
     }

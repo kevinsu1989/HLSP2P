@@ -1,67 +1,58 @@
 import Signal from './signal'
 import Seed from './seed'
+import Media from './media'
 import uri from 'urijs'
+import { defaults } from 'lodash'
 
 export default class DataBox {
-    constructor(videoId) {
+    constructor(videoId, opt) {
+        let defaultOpt = {
+            maxChunk: 1024 * 300 //300k
+        };
+        this.opt = defaults({}, defaultOpt, opt);
         this.videoId = videoId;
-        this.parts = {};
+        this.medias = {};
         this.isConnected = false;
-        this.seedManage = new Seed(function (requestId, partName) {
-            this.findPart(partName).then(data => {
-                this.append(requestId, data);
-                this.end();
-                //todo chunk data;
-            }).catch(err=>{
-                this.end();
-            });
+
+        this.seedManage = new Seed((peer, sessionId, partName) => {
+            //todo
         });
+
         this.signal = new Signal(videoId, this.seedManage, () => {
             this.isConnected = true;
         });
     }
 
-    getPart(partUrl) {
-        if (!this.isConnected) return this.getPartFromCDN(partUrl);
-        return getPartFromP2P(partUrl).catch(err => this.getPartFromCDN(partUrl));
-    }
+    getFile(url, onData = () => { }) {
+        let name = new uri(url).filename;
 
-    getPartFromCDN(partUrl) {
-        return fetch(partUrl, data => {
-            this.addPart(partUrl, data);
-            return data;
+        this.medias[name] = new Media(url, this.opt.maxChunk, function (part, blob) {
+            onData(blob);
         });
-    }
 
-    getPartFromP2P(partUrl) {
-        return this.seedManage.require(partUrl, (last, data) => {
-            return data;
-        }).then(data => {
-            this.addPart(partUrl, data);
-            return data;
-        });
+        return this.medias[name].start();
     }
 
     /**
     * add part you have
     * @param {*} partName 
     */
-    addPart(partUrl, data) {
-        let name = new uri(partUrl).filename;
-        this.parts[name] = {
-            partUrl,
-            name,
-            data
-        };
-        this.signal.addPart(name);
+    addPart(partUrl, blob) {
+        // let name = new uri(partUrl).filename;
+        // this.parts[name] = {
+        //     partUrl,
+        //     name,
+        //     blob
+        // };
+        // this.signal.addPart(name);
     }
 
     findPart(name) {
         return new Promise((resolve, reject) => {
             let found = this.parts[name];
-            if(found){
-                resolve(found.data);
-            } else{
+            if (found) {
+                resolve(found.blob);
+            } else {
                 reject(new Error(`没有找到名字为${name}的资源`));
             }
         })

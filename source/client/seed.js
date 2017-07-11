@@ -45,7 +45,7 @@ export default class Seed {
         if (this.connected[id]) return this.connected[id];
 
         let remotePeer = new Intercom(id, signal);
-        remotePeer.listen(this.finder.bind(remotePeer));
+        remotePeer.listen(this.finder.bind(this, remotePeer));
         this.connected[id] = remotePeer;
         return remotePeer;
     }
