@@ -8,10 +8,10 @@
     "date-fns": "^1.28.5",
     "eventemitter2": "^4.1.0",
     "express": "^4.15.3",
-    "json-bufferify": "0.0.9",
     "lodash": "^4.17.4",
     "query-string": "^4.3.4",
     "socket.io": "^2.0.3",
+    "socket.io-p2p-parser": "tomcartwrightuk/socket.io-p2p-parser",
     "urijs": "^1.18.10"
   },
   "devDependencies": {

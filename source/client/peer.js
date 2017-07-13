@@ -1,4 +1,3 @@
-import * as bufferify from 'json-bufferify'
 import {
     PeerConnection as nativePeerConnection,
     SessionDescription as nativeSessionDescription,
@@ -7,6 +6,7 @@ import {
 import { iceServers } from './config'
 import { logInfo, logError } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
+import { Encoder, Decoder } from 'socket.io-p2p-parser'
 
 export default class Peer {
     constructor(id, signal) {
@@ -14,6 +14,8 @@ export default class Peer {
         this.signal = signal;
         this.emitter = new EventEmitter2();
         this.isConnected = false;
+
+        this.decoder = new Decoder();
 
         //PeerRTCConnection
         this.connection = new nativePeerConnection({
@@ -29,8 +31,12 @@ export default class Peer {
         this.connection.ondatachannel = event => {
             //store the channel
             this.datachannel = event.channel;
-            this.handleDataChannel();
+            this.handleDataChannel(this.datachannel);
         };
+
+        this.decoder.on('decoded', decodedPacket => {
+            this.emit('data', decodedPacket);
+        })
     }
 
     get on() {
@@ -45,6 +51,11 @@ export default class Peer {
         return this.emitter.off.bind(this.emitter);
     }
 
+    error(err) {
+        logError(err);
+        return Promise.reject(err);
+    }
+
     /**
      * Send data to remote
      * @param {*} data 
@@ -54,8 +65,8 @@ export default class Peer {
     send(data) {
         let readyState = this.datachannel.readyState;
         if ('open' === readyState) {
-            let buf = bufferify.encode(0, data);
-            this.datachannel.send(buf);
+            this.datachannel.send(data);
+            logInfo('发送数据');
         } else {
             throw new Error('P2P通道还未打开');
         }
@@ -66,13 +77,11 @@ export default class Peer {
      * @param {*} label 
      * @param {*} opt 
      */
-    createDataChannel(label = '*', opt = {}) {
+    createDataChannel() {
         //RTCDataChannel
-        this.datachannel = this.connection.createDataChannel('Binary');
+        this.datachannel = this.connection.createDataChannel('data');
         this.datachannel.binaryType = "arraybuffer";
-        this.handleDataChannel();
-
-        return this.datachannel;
+        this.handleDataChannel(this.datachannel);
     }
 
     /**
@@ -81,21 +90,15 @@ export default class Peer {
      */
     handleDataChannel(datachannel) {
         //RTCDataChannel events
-        this.datachannel.onopen = () => {
-            let readyState = this.datachannel.readyState;
+        datachannel.onopen = () => {
+            let readyState = datachannel.readyState;
             this.isConnected = true;
-            this.emitter.emit('connected');
+            this.emit('connected');
         }
-        this.datachannel.onmessage = event => {
-            let data = bufferify.decode(0, {
-                type: 'string',
-                event: 'string',
-                msg: 'string',
-                data: 'array'
-            }, event.data);
-            this.emitter.emit('data', data);
+        datachannel.onmessage = event => {
+            this.decoder.add(event.data);
         }
-        this.datachannel.onclose = () => {
+        datachannel.onclose = () => {
             this.closeDataChannel();
         };
     }
@@ -106,7 +109,7 @@ export default class Peer {
      */
     receiveIceCandidate(candidate) {
         let remoteCandidate = new nativeIceCandidate(candidate);
-        this.connection.addIceCandidate(remoteCandidate).catch(logError);
+        this.connection.addIceCandidate(remoteCandidate).catch(this.error);
         return this;
     }
 
@@ -118,7 +121,7 @@ export default class Peer {
         this.connection.createOffer().then(offer => {
             this.connection.setLocalDescription(offer);
             this.signal.sendOffer(this.id, offer);
-        }, logError);
+        }, this.error);
         return this;
     }
 
@@ -131,7 +134,7 @@ export default class Peer {
         let remoteSessionDescription = new nativeSessionDescription(sdp);
         this.connection.setRemoteDescription(remoteSessionDescription).then(() => {
             this.sendAnswer();
-        }).catch(logError);
+        }).catch(this.error);
         return this;
     }
 
@@ -144,7 +147,7 @@ export default class Peer {
         this.connection.createAnswer().then(answer => {
             this.connection.setLocalDescription(answer);
             this.signal.sendAnswer(this.id, answer);
-        }).catch(logError);
+        }).catch(this.error);
         return this;
     }
 
@@ -155,7 +158,7 @@ export default class Peer {
     receiveAnswer(sdp) {
         if (!this.connection) return this;
         let remoteSessionDescription = new nativeSessionDescription(sdp);
-        this.connection.setRemoteDescription(remoteSessionDescription).catch(logError);
+        this.connection.setRemoteDescription(remoteSessionDescription).catch(this.error);
         return this;
     }
 
@@ -163,7 +166,7 @@ export default class Peer {
         if (!this.datachannel) return;
         this.datachannel.close();
         this.datachannel = null;
-        this.emitter.emit('channelclose');
+        this.emit('channelclose');
     }
 
     /**

@@ -16,7 +16,7 @@ export default class DataBox {
 
     getFile(url, range = '') {
         return this.getFileFromP2P(url, range).catch(err => {
-            logError(err);
+            logError(err.message);
             return this.getFileFromCDN(url, range);
         }).then(buf => {
             let partName = this.partName(this.id, url, range);
@@ -35,23 +35,24 @@ export default class DataBox {
         return fetch(url, options).then(res => {
             return res.arrayBuffer();
         }).then(buf => {
-            logInfo('从CDN获取模块');
+            console.log('从CDN获取模块', buf.byteLength);
             return buf;
         });
     }
 
     getFileFromP2P(url, range = '') {
-        if (!this.isConnected) return Promise.resolve(new Error('还没连上P2P服务'));
+        if (!this.isConnected) return Promise.reject(new Error('还没连上P2P服务'));
 
         let part = this.partName(this.id, url, range);
-        return this.seed.getRandomPeerHasPart(part).then(session => {
-            return session.connect();
-        }).then(session => {
-            return session.fetch(part);
-        }).then(buf => {
-            logInfo('从P2P获取模块');
-            return buf;
-        })
+        return this.seed.getRandomPeerHasPart(part)
+            .then(session => {
+                return session.connect();
+            }).then(session => {
+                return session.fetch(part);
+            }).then(buf => {
+                console.log('从P2P获取模块', buf.byteLength);
+                return buf;
+            })
     }
 
     partName(video, url, range = '') {
