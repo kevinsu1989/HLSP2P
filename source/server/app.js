@@ -3,6 +3,7 @@ import express from 'express'
 import http from 'http'
 import useIO from './io'
 import renderPage from './page'
+import { join } from 'path'
 
 
 // Express
@@ -17,6 +18,8 @@ const socket = io(server);
 useIO(socket);
 renderPage(app);
 
-server.listen(5000,()=>{
+app.use(express.static(join(__dirname, '../../resource')));
+
+server.listen(5000, () => {
     console.log('server is run');
 })

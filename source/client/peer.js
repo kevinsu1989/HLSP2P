@@ -1,3 +1,4 @@
+import * as bufferify from 'json-bufferify'
 import {
     PeerConnection as nativePeerConnection,
     SessionDescription as nativeSessionDescription,
@@ -32,6 +33,18 @@ export default class Peer {
         };
     }
 
+    get on() {
+        return this.emitter.on.bind(this.emitter);
+    }
+
+    get emit() {
+        return this.emitter.emit.bind(this.emitter);
+    }
+
+    get off() {
+        return this.emitter.off.bind(this.emitter);
+    }
+
     /**
      * Send data to remote
      * @param {*} data 
@@ -41,7 +54,8 @@ export default class Peer {
     send(data) {
         let readyState = this.datachannel.readyState;
         if ('open' === readyState) {
-            this.datachannel.send(JSON.stringify(data));
+            let buf = bufferify.encode(0, data);
+            this.datachannel.send(buf);
         } else {
             throw new Error('P2P通道还未打开');
         }
@@ -54,7 +68,8 @@ export default class Peer {
      */
     createDataChannel(label = '*', opt = {}) {
         //RTCDataChannel
-        this.datachannel = this.connection.createDataChannel(label);
+        this.datachannel = this.connection.createDataChannel('Binary');
+        this.datachannel.binaryType = "arraybuffer";
         this.handleDataChannel();
 
         return this.datachannel;
@@ -72,7 +87,13 @@ export default class Peer {
             this.emitter.emit('connected');
         }
         this.datachannel.onmessage = event => {
-            this.emitter.emit('data', JSON.parse(event.data));
+            let data = bufferify.decode(0, {
+                type: 'string',
+                event: 'string',
+                msg: 'string',
+                data: 'array'
+            }, event.data);
+            this.emitter.emit('data', data);
         }
         this.datachannel.onclose = () => {
             this.closeDataChannel();

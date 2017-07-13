@@ -4,71 +4,80 @@ import { logInfo } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 
 export default class Signal {
-    constructor(
-        path = './',
-        seedManage,
-        onReady = () => { }
-    ) {
-        this.socket = io();
+    constructor(room = './', seedBank) {
         this.emitter = new EventEmitter2();
+        this.room = room;
+        this.isConnected = false;
+
+        this.socket = io();
 
         this.socket.on('connect', () => {
-
-            this.socket.emit('join', path);
+            this.socket.emit('join', this.room);
 
             this.socket.on('ready', seeds => {
                 seeds.forEach(function (seed) {
-                    seedManage.addSeed(seed);
+                    logInfo(`${seed.id} 加入`);
+                    seedBank.addSeed(seed);
                 });
 
                 this.socket.on('addSeed', seed => {
-                    seedManage.addSeed(seed);
+                    logInfo(`${seed.id} 加入`);
+                    seedBank.addSeed(seed);
                 });
 
                 this.socket.on('removeSeed', id => {
-                    seedManage.removeSeed(id);
+                    logInfo(`${id} 离开`);
+                    seedBank.removeSeed(id);
                 });
 
                 this.socket.on('updatePart', (id, partName) => {
-                    seedManage.updatePart(id, partName);
+                    logInfo(`${id} 更新 ${partName} 数据模块信息`);
+                    seedBank.updatePart(id, partName);
                 })
 
                 this.socket.on('receiveCandidate', (peer, candidate) => {
-                    seedManage.getConnectedPeer(peer).receiveIceCandidate(candidate);
-                    logInfo(`receive candidate from ${peer}`);
+                    seedBank.getConnectedPeer(peer).receiveIceCandidate(candidate);
+                    logInfo(`收到来自 ${peer} 的candidate`);
                 });
 
                 this.socket.on('receiveOffer', (peer, offer) => {
-                    seedManage.getConnectedPeer(peer).receiveOffer(offer);
-                    logInfo(`receive offer from ${peer}`);
+                    seedBank.getConnectedPeer(peer).receiveOffer(offer);
+                    logInfo(`收到来自 ${peer} 连接描述`);
                 })
 
                 this.socket.on('receiveAnswer', (peer, answer) => {
-                    seedManage.getConnectedPeer(peer).receiveAnswer(answer);
-                    logInfo(`receive answer from ${peer}`);
+                    seedBank.getConnectedPeer(peer).receiveAnswer(answer);
+                    logInfo(`收到来自 ${peer} 的应答`);
                 })
 
-                onReady();
+                logInfo('P2P服务已连接');
+
+                this.isConnected = true;
             });
         });
     }
 
     addPart(part) {
+        if (!this.isConnected) return;
         this.socket.emit('addPart', part);
+        logInfo(`添加数据模块信息`);
     }
 
     sendCandidate(id, candidate) {
-        logInfo(`send candidate to ${id}`);
+        if (!this.isConnected) return;
         this.socket.emit('sendCandidate', id, candidate);
+        logInfo(`发送candidate给 ${id}`);
     }
 
     sendOffer(id, offer) {
-        logInfo(`send offer to ${id}`);
+        if (!this.isConnected) return;
         this.socket.emit('sendOffer', id, offer);
+        logInfo(`发送描述请求给 ${id}`);
     }
 
     sendAnswer(id, answer) {
-        logInfo(`send answer to ${id}`);
+        if (!this.isConnected) return;
         this.socket.emit('sendAnswer', id, answer);
+        logInfo(`发送描述回复给 ${id}`);
     }
 }

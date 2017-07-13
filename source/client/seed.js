@@ -1,4 +1,5 @@
-import Intercom from './intercom'
+import Session from './session'
+import Signal from './signal'
 import { logError } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 import { find, remove, take, random } from 'lodash'
@@ -7,14 +8,35 @@ export default class Seed {
     /**
      * @param {function} finder - help others to find part
      */
-    constructor(finder = () => null) {
+    constructor(id) {
+        this.id = id;
         this.emitter = new EventEmitter2();
         //stores
         this.seeds = [];
         this.connected = [];
-        //state
-        this.isConnected = false;
-        this.finder = finder;
+        this.parts = {};
+
+        this.signal = new Signal(id, this);
+    }
+
+    addPart(url, name, buf) {
+        this.parts[name] = {
+            url,
+            name,
+            data: buf
+        };
+        this.signal.addPart(name);
+    }
+
+    findPart(name) {
+        return new Promise((resolve, reject) => {
+            let found = this.parts[name];
+            if (found) {
+                resolve(found.data);
+            } else {
+                reject(new Error(`没有找到名字为${name}的资源`));
+            }
+        })
     }
 
     /**
@@ -23,29 +45,24 @@ export default class Seed {
      */
     addSeed(seed) {
         this.seeds.push(seed);
-        this.emitter.emit('update seed', this.seeds);
     }
 
     removeSeed(id) {
         remove(this.seeds, seed => seed.id == id);
-        this.emitter.emit('update seed', this.seeds);
     }
 
-    updatePart(id, partName) {
+    updatePart(id, part) {
         let seed = find(this.seeds, ['id', id]);
-        seed.parts.push(partName);
-        this.emitter.emit('update seed', this.seeds);
+        seed.parts.push(part);
     }
 
     /**
      * create peer connection or find connected you have
      * @param {*} id 
      */
-    getConnectedPeer(id, signal) {
+    getConnectedPeer(id) {
         if (this.connected[id]) return this.connected[id];
-
-        let remotePeer = new Intercom(id, signal);
-        remotePeer.listen(this.finder.bind(this, remotePeer));
+        let remotePeer = new Session(id, this);
         this.connected[id] = remotePeer;
         return remotePeer;
     }
@@ -60,23 +77,10 @@ export default class Seed {
         });
     }
 
-    /**
-     * want a part
-     * @param {*} part 
-     */
-    require(part, handle = (last, data) => data) {
-        return new Promise((resolve, reject) => {
-            let hasPart = this.getSeedsHasPart(part);
-            if (hasPart.length == 0) reject(new Error('谁都没有这个资源'));
-            let randomSeed = hasPart[random(hasPart.length - 1)];
-            let peer = this.getConnectedPeer(randomSeed.id);
-            return peer;
-        })
-            .then(peer => peer.connect())
-            .then(peer => peer.require(part, handle.bind(peer)));
-    }
-
-    updateSeed(onUpdateSeed = () => { }) {
-        this.emitter.on('update seed', onUpdateSeed);
+    getRandomPeerHasPart(partName) {
+        let hasPart = this.getSeedsHasPart(partName);
+        if (hasPart.length == 0) return Promise.reject(new Error('谁都没有这个资源'));
+        let randomSeed = hasPart[random(hasPart.length - 1)];
+        return Promise.resolve(this.getConnectedPeer(randomSeed.id));
     }
 }
