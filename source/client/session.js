@@ -4,31 +4,51 @@ import base64 from 'base64-arraybuffer'
 import { chunk } from 'lodash'
 import { getTime } from 'date-fns'
 import { logError, logInfo } from './debugger'
-import { Encoder, BINARY_EVENT, EVENT, ERROR } from 'socket.io-p2p-parser'
+import { Decoder, Encoder, BINARY_EVENT, EVENT, ERROR } from 'socket.io-p2p-parser'
 
 export default class Session extends Peer {
     constructor(id, seed) {
         super(id, seed.signal);
         this.seed = seed;
         this.maxChunkSize = 20000;
+        this.decoder = new Decoder();
 
-        this.on('data', data => {
-            if (data.type === ERROR) return this.error(new Error(data.data));
-            if (!data.data.event) return this.error(new Error('错误的消息格式:缺少应答编号'));
+        this.queue = [];
+        this.currentTask = null;
 
-            switch (data.type) {
+        this.onConnected = () => { };
+
+        this.on('message', event => {
+            this.decoder.add(event.data);
+        });
+
+        this.on('error', err => {
+            if (this.currentTask) this.currentTask.reject(err);
+        })
+
+        this.on('statechange', state => {
+            if (state === this.states.CONNECTED) {
+                this.next();
+            }
+        });
+
+        this.decoder.on('decoded', decodedPacket => {
+            if (decodedPacket.type === ERROR) return this.error(new Error(decodedPacket.data));
+            if (!decodedPacket.data.event) return this.error(new Error('错误的消息格式:缺少应答编号'));
+
+            switch (decodedPacket.type) {
                 case EVENT:
-                    this.seed.findPart(data.data.part).then(buf => {
-                        console.log(`发送数据块 ${buf.byteLength} : ${data.data.part}`);
-                        this.sendBinaryResponse(buf, data.data.event);
+                    this.seed.findPart(decodedPacket.data.part).then(buf => {
+                        console.log(`发送数据块 ${buf.byteLength} : ${decodedPacket.data.part}`);
+                        this.sendBinaryResponse(buf, decodedPacket.data.event);
                     })
                     break;
                 case BINARY_EVENT:
-                    let buf = data.data.data;//!!!!!
-                    this.emit(`data.${data.data.event}`, buf);
+                    let buf = decodedPacket.data.data;//!!!!!
+                    if (this.currentTask) this.currentTask.resolve(buf);
                     break;
             }
-        });
+        })
     }
 
     sendBinaryResponse(buf, event) {
@@ -81,25 +101,49 @@ export default class Session extends Peer {
 
     connect() {
         return new Promise((resolve, reject) => {
-            if (!this.isConnected) {
+            if (this.readyState == this.states.NOT_CONNECTE) {
                 this.createDataChannel();
                 this.sendOffer();
-                this.emitter.on('connected', () => {
-                    resolve(this);
-                });
+                this.onConnected = resolve;
+            } else if (this.readyState === this.states.CONNECTED) {
+                resolve(this);
+            } else if (this.readyState === this.states.CONNECTING) {
+                resolve(this);
             } else {
                 resolve(this);
             }
         });
     }
 
+    next() {
+        if (this.currentTask == null && this.queue.length > 0 && this.readyState === this.states.CONNECTED) {
+            this.currentTask = this.queue.shift();
+            this.currentTask.handle();
+        }
+        //wait
+    }
+
     fetch(part) {
+        let clearCurrentAndNext = () => {
+            this.currentTask = null;
+            this.next();
+        }
         return new Promise((resolve, reject) => {
-            let event = md5(getTime(new Date()) + this.id);
-            this.emitter.once(`data.${event}`, data => {
-                resolve(data);
+            this.queue.push({
+                resolve: result => {
+                    resolve(result);
+                    clearCurrentAndNext();
+                },
+                reject: reason => {
+                    reject(reason);
+                    clearCurrentAndNext();
+                },
+                handle: () => {
+                    let event = md5(getTime(new Date()) + this.id);
+                    this.sendFetchMessage(part, event).catch(err => reject);
+                }
             });
-            this.sendFetchMessage(part, event).catch(err => reject);
+            this.next();
         });
     }
 }

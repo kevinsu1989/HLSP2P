@@ -16,7 +16,7 @@ export default class DataBox {
 
     getFile(url, range = '') {
         return this.getFileFromP2P(url, range).catch(err => {
-            logError(err.message);
+            logError(err);
             return this.getFileFromCDN(url, range);
         }).then(buf => {
             let partName = this.partName(this.id, url, range);

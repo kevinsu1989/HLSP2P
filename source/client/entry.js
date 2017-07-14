@@ -4,10 +4,9 @@ import co from 'co'
 import { take } from 'lodash'
 import { Parser } from 'm3u8-parser'
 
-
 (function () {
     let videoId = '123';
-    let url = 'http://pcvideoyf.titan.mgtv.com/c1/2017/07/10_0/6C2AA3DA4EE5EC35E9F86A616D92EC37_20170710_1_1_482_mp4/22BEF97F781427F9D86ECEC83316695E.m3u8?pm=9Du_ZbWEd8s6LIcPQqLrK5YFtqqX3JGa~l~1VgBIZeJc59~QIx0ArJ9dzBGHVzti7Mp6rhGbvS41liQ~AYFemOQd4SPtlAHGtkzCfDTCwhVcD9zsh~FTsqH6CRJfYqUAN~igzgtviEnqWTgCGSaTrlNInEuyg_5A0J4Cz7NtPTSR4GwF5tJSMTNvYv_IXacc36PJGvgX9oWA3fqJlIrKQA~0emFC6el2WRtOHVVIZyNTt9z4JCAPTcOpiYQoAi5Dt6nE_mucwq~hvYQrIc3gBDuOtBckT2jEnJgmG7IY17W7G8TBNrXyvQ2rXGR62xRy7oP9lqDT0WKA0q7CmyI17dao95Rym4OtKsyeuiUxMHQ-&arange=0';
+    let url = 'http://pcvideoyf.titan.mgtv.com/c1/2017/07/07_0/C8767E84E67BA6562E37A7E0CDC46602_20170707_1_1_482_mp4/94EFB30F98A179E7D27A244526171284.m3u8?pm=GgmMTGBDnTIcIjOUXzB9l254tpPflJdZtWiWc5oWOMpV9VNB~ugWV1SBgLHPR~dRHPh1TJYNhb_i4y1JEyUPuBppPZtGACdWumy9XK2DJMYJaj7urgOaVw55XiDKlxxzA47h~y7NSJzvA4YcCGwbieV6pOY9nvwH0n_ucp0LYRTY7vf6sDp2aDDnW2kX~Kr5YTMduu27_5YwgfQnGMrM3Nm6YJ6ZpbkfBg7O32ol9l1LgmjiNHaJAL1TSuE7MvBzVIXuAN4FJsosw46PnkkeKMUjLc05J0cvz_4jZqGfC19cmSCf_QkPEO4BD9_URbzFfvcYISU6HmKo2usGGURe_ChyZ7BBX1jtO2WhfsPL97U-&arange=0';
 
     let video = document.getElementById('video');
     let databox = new DataBox(videoId);
@@ -22,7 +21,10 @@ import { Parser } from 'm3u8-parser'
     }
 
 
-    fetch(url).then(res => {
+    fetch(url, {
+        mode: 'cors',
+        credentials: 'same-origin'
+    }).then(res => {
         return res.text();
     }).then(m3u8 => {
         let parser = new Parser();
@@ -30,10 +32,17 @@ import { Parser } from 'm3u8-parser'
         parser.end();
         return parser.manifest;
     }).then(m3u8 => {
-        return co(function* () {
-            for (let segment of take(m3u8.segments, 10)) {
-                let data = yield fetchSource(segment.uri);
-            }
+        return new Promise((done) => {
+            setTimeout(function () {
+                done(Promise.all(m3u8.segments.map(segment => fetchSource(segment.uri))));
+            }, 2000);
         })
+        // return co(function* () {
+        //     for (let segment of take(m3u8.segments, 10)) {
+        //         let data = yield fetchSource(segment.uri);
+        //     }
+        // })
+    }).catch(err => {
+        console.error(err);
     });
 })();

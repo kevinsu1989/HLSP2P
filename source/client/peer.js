@@ -6,16 +6,23 @@ import {
 import { iceServers } from './config'
 import { logInfo, logError } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
-import { Encoder, Decoder } from 'socket.io-p2p-parser'
+
+const NOT_CONNECTE = 0;
+const CONNECTING = 1;
+const CONNECTED = 2;
 
 export default class Peer {
     constructor(id, signal) {
         this.id = id;
         this.signal = signal;
         this.emitter = new EventEmitter2();
-        this.isConnected = false;
+        this.readyState = NOT_CONNECTE;
 
-        this.decoder = new Decoder();
+        this.states = {
+            NOT_CONNECTE,
+            CONNECTING,
+            CONNECTED
+        };
 
         //PeerRTCConnection
         this.connection = new nativePeerConnection({
@@ -33,10 +40,6 @@ export default class Peer {
             this.datachannel = event.channel;
             this.handleDataChannel(this.datachannel);
         };
-
-        this.decoder.on('decoded', decodedPacket => {
-            this.emit('data', decodedPacket);
-        })
     }
 
     get on() {
@@ -53,6 +56,7 @@ export default class Peer {
 
     error(err) {
         logError(err);
+        this.emit('err', err);
         return Promise.reject(err);
     }
 
@@ -66,7 +70,6 @@ export default class Peer {
         let readyState = this.datachannel.readyState;
         if ('open' === readyState) {
             this.datachannel.send(data);
-            logInfo('发送数据');
         } else {
             throw new Error('P2P通道还未打开');
         }
@@ -92,11 +95,10 @@ export default class Peer {
         //RTCDataChannel events
         datachannel.onopen = () => {
             let readyState = datachannel.readyState;
-            this.isConnected = true;
-            this.emit('connected');
+            this.changeState(this.states.CONNECTED);
         }
         datachannel.onmessage = event => {
-            this.decoder.add(event.data);
+            this.emit('message', event);
         }
         datachannel.onclose = () => {
             this.closeDataChannel();
@@ -109,8 +111,7 @@ export default class Peer {
      */
     receiveIceCandidate(candidate) {
         let remoteCandidate = new nativeIceCandidate(candidate);
-        this.connection.addIceCandidate(remoteCandidate).catch(this.error);
-        return this;
+        this.connection.addIceCandidate(remoteCandidate).catch(err => this.error(err));
     }
 
     /**
@@ -118,11 +119,14 @@ export default class Peer {
      */
     sendOffer() {
         if (!this.connection) return this;
+        this.changeState(this.states.CONNECTING);
         this.connection.createOffer().then(offer => {
             this.connection.setLocalDescription(offer);
             this.signal.sendOffer(this.id, offer);
-        }, this.error);
-        return this;
+        }, err => {
+            this.changeState(this.states.NOT_CONNECTE);
+            this.error(err)
+        });
     }
 
     /**
@@ -131,11 +135,14 @@ export default class Peer {
      */
     receiveOffer(sdp) {
         if (!this.connection) return this;
+        this.changeState(this.states.CONNECTING);
         let remoteSessionDescription = new nativeSessionDescription(sdp);
         this.connection.setRemoteDescription(remoteSessionDescription).then(() => {
             this.sendAnswer();
-        }).catch(this.error);
-        return this;
+        }).catch(err => {
+            this.changeState(this.states.NOT_CONNECTE);
+            this.error(err)
+        });
     }
 
 
@@ -144,11 +151,14 @@ export default class Peer {
      */
     sendAnswer() {
         if (!this.connection) return this;
+        this.changeState(this.states.CONNECTING);
         this.connection.createAnswer().then(answer => {
             this.connection.setLocalDescription(answer);
             this.signal.sendAnswer(this.id, answer);
-        }).catch(this.error);
-        return this;
+        }).catch(err => {
+            this.changeState(this.states.NOT_CONNECTE);
+            this.error(err)
+        });
     }
 
     /**
@@ -157,9 +167,12 @@ export default class Peer {
      */
     receiveAnswer(sdp) {
         if (!this.connection) return this;
+        this.changeState(this.states.CONNECTING);
         let remoteSessionDescription = new nativeSessionDescription(sdp);
-        this.connection.setRemoteDescription(remoteSessionDescription).catch(this.error);
-        return this;
+        this.connection.setRemoteDescription(remoteSessionDescription).catch(err => {
+            this.changeState(this.states.NOT_CONNECTE);
+            this.error(err)
+        });
     }
 
     closeDataChannel() {
@@ -167,6 +180,13 @@ export default class Peer {
         this.datachannel.close();
         this.datachannel = null;
         this.emit('channelclose');
+    }
+
+    changeState(state) {
+        if (this.readyState != state) {
+            this.readyState = state;
+            this.emit('statechange', state);
+        }
     }
 
     /**
@@ -177,6 +197,6 @@ export default class Peer {
         this.closeDataChannel();
         this.connection.close();
         this.connection = null;
-        this.isConnected = false;
+        this.changeState(this.states.NOT_CONNECTE);
     }
 }
