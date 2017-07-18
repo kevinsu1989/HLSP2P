@@ -1,7 +1,7 @@
 import Peer from './peer'
 import md5 from 'blueimp-md5'
 import { getTime } from 'date-fns'
-import { chunkBuffer } from './util'
+import { chunkBuffer, timeCounter } from './util'
 import { logError, logInfo } from './debugger'
 import { Decoder, Encoder, BINARY_EVENT, ACK, ERROR } from 'em-rtc-parser'
 
@@ -185,8 +185,8 @@ export default class Fetch extends Peer {
     }
 
     //public methods
-    fetch(part) {
-        return new Promise((resolve, reject) => {
+    fetch(part, timeout = 500) {
+        let fetcher = new Promise((resolve, reject) => {
             //channel build first!!
             if (!this.messageChannel) {
                 this.createMessageChannel();
@@ -201,8 +201,6 @@ export default class Fetch extends Peer {
                     this.emitter.once(`${seq}`, function (err, buf) {
                         if (err) return reject(err);
                         resolve(buf);
-                        //next task
-                        that.next();
                     });
                 }).catch(err => {
                     reject(err);
@@ -213,5 +211,7 @@ export default class Fetch extends Peer {
             //try to exec immediately
             this.next();
         });
+
+        return timeCounter(fetcher, timeout);
     }
 }

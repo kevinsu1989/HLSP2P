@@ -9,3 +9,15 @@ export const chunkBuffer = (buf, chunkSize) => {
     }
     return result;
 }
+
+export const timeCounter = (task, timeout = 1500) => {
+    let timeoutPromise = new Promise((result, reject) => {
+        setTimeout(() => {
+            reject(new Error('请求超时'));
+        }, timeout);
+    });
+
+    let taskPromise = Promise.resolve(task);
+
+    return Promise.race([timeoutPromise, taskPromise]);
+}
