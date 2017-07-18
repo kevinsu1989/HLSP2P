@@ -1,4 +1,4 @@
-import Session from './session'
+import Session from './fetch'
 import Signal from './signal'
 import { logError } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
@@ -8,7 +8,7 @@ export default class Seed {
     /**
      * @param {function} finder - help others to find part
      */
-    constructor(id) {
+    constructor(host, id) {
         this.id = id;
         this.emitter = new EventEmitter2();
         //stores
@@ -16,7 +16,7 @@ export default class Seed {
         this.connected = [];
         this.parts = {};
 
-        this.signal = new Signal(id, this);
+        this.signal = new Signal(host, id, this);
     }
 
     addPart(url, name, buf) {

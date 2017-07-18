@@ -6,10 +6,12 @@ import { Parser } from 'm3u8-parser'
 
 (function () {
     let videoId = '123';
-    let url = 'http://pcvideoyf.titan.mgtv.com/c1/2017/07/07_0/C8767E84E67BA6562E37A7E0CDC46602_20170707_1_1_482_mp4/94EFB30F98A179E7D27A244526171284.m3u8?pm=GgmMTGBDnTIcIjOUXzB9l254tpPflJdZtWiWc5oWOMpV9VNB~ugWV1SBgLHPR~dRHPh1TJYNhb_i4y1JEyUPuBppPZtGACdWumy9XK2DJMYJaj7urgOaVw55XiDKlxxzA47h~y7NSJzvA4YcCGwbieV6pOY9nvwH0n_ucp0LYRTY7vf6sDp2aDDnW2kX~Kr5YTMduu27_5YwgfQnGMrM3Nm6YJ6ZpbkfBg7O32ol9l1LgmjiNHaJAL1TSuE7MvBzVIXuAN4FJsosw46PnkkeKMUjLc05J0cvz_4jZqGfC19cmSCf_QkPEO4BD9_URbzFfvcYISU6HmKo2usGGURe_ChyZ7BBX1jtO2WhfsPL97U-&arange=0';
+    let url = 'http://pcvideoyf.titan.mgtv.com/c1/2017/07/18_0/1D543C9B67F98D8B8D49FB7E7B01A6EC_20170718_1_1_426_mp4/9B402FA3FE47063447AB09EF17356453.m3u8?pm=f2fM1Y9uj5eaHKgUgcjHGTURXhI8RmoRCXPK9VCv8pm6IOmUnVQ_nox493oj4aNRsej~Kv5eSb~1AWQMftbxf6td_B8V5k~t~AW8p5OAufog6D_XjQW~9c0ZwkVOFDuRdbu79m5Tvw3YTi2Rspi1RYdz0JVF6NhIVpzRFYGfQxdokVrtpGFx8J9XDLREsjFYnO5Tkg9SZffkj2l4G~t4bMGZnfrez2cVSyNNczo8KV9qyPEc6BEYIklRBwMGAMNnDdhisxbIp_lnnNkIZaZ57JjCZYFfCERKgGgTKfiiugU1Cqv8TlD28wvLVcCDmkE7C9YrZuDEmgRTUE84VmOWPlrbjPsx6rFfc5xkU4tiBcU-&arange=0';
 
     let video = document.getElementById('video');
-    let databox = new DataBox(videoId);
+    let databox = new DataBox('/', videoId);
+    // let source = new MediaSource('video/mp2t; codecs="avc1.42E01E"');
+    // video.src = URL.createObjectURL(source);
 
     const fetchSource = (path) => {
         let m3u8 = new uri(url);
@@ -20,29 +22,28 @@ import { Parser } from 'm3u8-parser'
         return databox.getFile(m3u8)
     }
 
-
-    fetch(url, {
-        mode: 'cors',
-        credentials: 'same-origin'
-    }).then(res => {
-        return res.text();
-    }).then(m3u8 => {
-        let parser = new Parser();
-        parser.push(m3u8);
-        parser.end();
-        return parser.manifest;
-    }).then(m3u8 => {
-        return new Promise((done) => {
-            setTimeout(function () {
-                done(Promise.all(m3u8.segments.map(segment => fetchSource(segment.uri))));
-            }, 2000);
-        })
-        // return co(function* () {
-        //     for (let segment of take(m3u8.segments, 10)) {
-        //         let data = yield fetchSource(segment.uri);
-        //     }
-        // })
-    }).catch(err => {
-        console.error(err);
+    document.getElementById('play').addEventListener('click', () => {
+        fetch(url).then(res => {
+            return res.text();
+        }).then(m3u8 => {
+            let parser = new Parser();
+            parser.push(m3u8);
+            parser.end();
+            return parser.manifest;
+        }).then(m3u8 => {
+            // return new Promise((done) => {
+            //     setTimeout(function () {
+            //         done(Promise.all(m3u8.segments.map(segment => fetchSource(segment.uri))));
+            //     }, 2000);
+            // })
+            return co(function* () {
+                for (let segment of take(m3u8.segments, 10)) {
+                    let buf = yield fetchSource(segment.uri);
+                    // source.addSourceBuffer(new Uint8Array(buf));
+                }
+            })
+        }).catch(err => {
+            console.error(err);
+        });
     });
 })();

@@ -1,13 +1,18 @@
 import Seed from './seed'
 import uri from 'urijs'
 import { defaults } from 'lodash'
+import { isWebRTCSupported } from 'detectrtc'
 import { logInfo, logError } from './debugger'
 
+const forceCDN = false;
+
 export default class DataBox {
-    constructor(id) {
+    constructor(host, id) {
         this.id = id;
         this.parts = {};
-        this.seed = new Seed(id);
+        this.seed = null;
+        if (isWebRTCSupported || !forceCDN)
+            this.seed = new Seed(host, id);
     }
 
     get isConnected() {
@@ -19,8 +24,10 @@ export default class DataBox {
             logError(err);
             return this.getFileFromCDN(url, range);
         }).then(buf => {
-            let partName = this.partName(this.id, url, range);
-            this.seed.addPart(url, partName, buf);
+            if (isWebRTCSupported) {
+                let partName = this.partName(this.id, url, range);
+                this.seed.addPart(url, partName, buf);
+            }
             return buf;
         });
     }
@@ -41,18 +48,18 @@ export default class DataBox {
     }
 
     getFileFromP2P(url, range = '') {
+        if (forceCDN) return Promise.reject(new Error('强制使用CDN'));
+        if (!isWebRTCSupported) return Promise.reject(new Error('WebRTC不支持'));
         if (!this.isConnected) return Promise.reject(new Error('还没连上P2P服务'));
 
         let part = this.partName(this.id, url, range);
         return this.seed.getRandomPeerHasPart(part)
             .then(session => {
-                return session.connect();
-            }).then(session => {
                 return session.fetch(part);
             }).then(buf => {
                 console.log('从P2P获取模块', buf.byteLength);
                 return buf;
-            })
+            });
     }
 
     partName(video, url, range = '') {

@@ -4,22 +4,25 @@ import base64 from 'base64-arraybuffer'
 import { chunk } from 'lodash'
 import { getTime } from 'date-fns'
 import { logError, logInfo } from './debugger'
-import { Decoder, Encoder, BINARY_EVENT, EVENT, ERROR } from 'socket.io-p2p-parser'
+import { Decoder, Encoder, BINARY_EVENT, EVENT, ERROR } from 'em-rtc-parser'
 
 export default class Session extends Peer {
     constructor(id, seed) {
         super(id, seed.signal);
         this.seed = seed;
-        this.maxChunkSize = 20000;
+        this.maxChunkSize = 500;
         this.decoder = new Decoder();
 
         this.queue = [];
         this.currentTask = null;
 
-        this.onConnected = () => { };
-
         this.on('message', event => {
-            this.decoder.add(event.data);
+            try {
+                this.decoder.add(event.data);
+            }
+            catch (err) {
+                this.error(err);
+            }
         });
 
         this.on('error', err => {
@@ -38,13 +41,15 @@ export default class Session extends Peer {
 
             switch (decodedPacket.type) {
                 case EVENT:
-                    this.seed.findPart(decodedPacket.data.part).then(buf => {
-                        console.log(`发送数据块 ${buf.byteLength} : ${decodedPacket.data.part}`);
+                    this.seed.findPart(decodedPacket.data.data).then(buf => {
+                        console.log(`发送数据块 ${buf.byteLength} : ${decodedPacket.data.data}`);
                         this.sendBinaryResponse(buf, decodedPacket.data.event);
+                    }).catch(err => {
+                        this.error(err);
                     })
                     break;
                 case BINARY_EVENT:
-                    let buf = decodedPacket.data.data;//!!!!!
+                    let buf = decodedPacket.data.data;
                     if (this.currentTask) this.currentTask.resolve(buf);
                     break;
             }
@@ -56,14 +61,14 @@ export default class Session extends Peer {
 
         return this.sendEncodedPackets({
             type: BINARY_EVENT,
-            data: { event, chunks: chunkedBuffer }
-        });
+            data: { event, data: chunkedBuffer }
+        })
     }
 
     sendFetchMessage(part, event) {
         return this.sendEncodedPackets({
             type: EVENT,
-            data: { event, part }
+            data: { event, data: part }
         });
     }
 
@@ -95,23 +100,13 @@ export default class Session extends Peer {
         return result;
     }
 
-    chunkToBuffer(chunks) {
-        return new Uint8Array(chunks).buffer;
-    }
-
     connect() {
         return new Promise((resolve, reject) => {
             if (this.readyState == this.states.NOT_CONNECTE) {
                 this.createDataChannel();
                 this.sendOffer();
-                this.onConnected = resolve;
-            } else if (this.readyState === this.states.CONNECTED) {
-                resolve(this);
-            } else if (this.readyState === this.states.CONNECTING) {
-                resolve(this);
-            } else {
-                resolve(this);
             }
+            resolve(this);
         });
     }
 
@@ -123,10 +118,17 @@ export default class Session extends Peer {
         //wait
     }
 
+    done() {
+        if (this.queue.length === 0 && this.readyState === this.states.CONNECTED) {
+            this.closeDataChannel();
+        }
+    }
+
     fetch(part) {
         let clearCurrentAndNext = () => {
             this.currentTask = null;
             this.next();
+            this.done();
         }
         return new Promise((resolve, reject) => {
             this.queue.push({
@@ -140,7 +142,10 @@ export default class Session extends Peer {
                 },
                 handle: () => {
                     let event = md5(getTime(new Date()) + this.id);
-                    this.sendFetchMessage(part, event).catch(err => reject);
+                    return this.sendFetchMessage(part, event).catch(err => {
+                        reject(err);
+                        clearCurrentAndNext();
+                    });
                 }
             });
             this.next();

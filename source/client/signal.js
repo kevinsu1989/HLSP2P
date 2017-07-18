@@ -4,12 +4,13 @@ import { logInfo } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 
 export default class Signal {
-    constructor(room = './', seedBank) {
+    constructor(host = '/', room = './', seedBank) {
         this.emitter = new EventEmitter2();
+        this.host = host;
         this.room = room;
         this.isConnected = false;
 
-        this.socket = io();
+        this.socket = io(host);
 
         this.socket.on('connect', () => {
             this.socket.emit('join', this.room);
