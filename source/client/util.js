@@ -1,3 +1,7 @@
+
+import md5 from 'js-md5'
+import { getTime } from 'date-fns'
+
 export const chunkBuffer = (buf, chunkSize) => {
     let result = [];
     if (buf instanceof ArrayBuffer) {
@@ -20,4 +24,12 @@ export const timeCounter = (task, timeout = 1500) => {
     let taskPromise = Promise.resolve(task);
 
     return Promise.race([timeoutPromise, taskPromise]);
+}
+
+export const MD5Buffer = buf => {
+    return md5(buf);
+}
+
+export const MD5Now = (id, part) => {
+    return md5(getTime(new Date()) + id + part);
 }

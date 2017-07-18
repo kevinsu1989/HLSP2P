@@ -1,7 +1,5 @@
 import Peer from './peer'
-import md5 from 'blueimp-md5'
-import { getTime } from 'date-fns'
-import { chunkBuffer, timeCounter } from './util'
+import { chunkBuffer, timeCounter, MD5Buffer, MD5Now } from './util'
 import { logError, logInfo } from './debugger'
 import { Decoder, Encoder, BINARY_EVENT, ACK, ERROR } from 'em-rtc-parser'
 
@@ -91,16 +89,20 @@ export default class Fetch extends Peer {
 
         decoder.on('decoded', decodedPacket => {
             channel.close();
-            if (ERROR === decodedPacket.type) {
-                this.emit(`${propSeq}`, new Error(decodedPacket.data), null);
-                return;
-            };
+            if (ERROR === decodedPacket.type) return this.emit(`${propSeq}`, new Error(decodedPacket.data), null);
             let seq = decodedPacket.data.seq;
             let buf = decodedPacket.data.data;
+            let md5 = decodedPacket.data.md5;
+
+            if (!seq) return this.emit(`${propSeq}`, new Error('为获取到会话编号'), null);
+            if (!(buf instanceof ArrayBuffer) || buf.byteLength == 0) return this.emit(`${propSeq}`, new Error('数据类型错误'), null);
+            if (!md5) return this.emit(`${propSeq}`, new Error('缺少MD5验签'), null);
+
+
+            let md5Recevice = MD5Buffer(buf);
+            if (md5Recevice !== md5) return this.emit(`${propSeq}`, new Error('MD5验签不通过'), null);
 
             logInfo(`收到模块 编号 ${seq} 的数据 ${buf.byteLength} byte`);
-
-            //todo md5 check
             this.emit(`${seq}`, null, buf);
         });
         channel.onmessage = event => {
@@ -113,7 +115,7 @@ export default class Fetch extends Peer {
 
     //sending
     sendRequestMessage(part) {
-        let seq = md5(getTime(new Date()) + this.id + part);
+        let seq = MD5Now(this.id, part);
         let message = {
             type: ACK,
             data: {
@@ -128,11 +130,12 @@ export default class Fetch extends Peer {
     sendBinaryData(seq, buf) {
         return this.createDataChannel(seq).then(channel => {
             let chunks = chunkBuffer(buf, this.chunkSize);
-            //todo md5 auth
+            let md5 = MD5Buffer(buf);
             let chunkData = {
                 type: BINARY_EVENT,
                 data: {
                     seq,
+                    md5,
                     data: chunks
                 }
             };
@@ -180,7 +183,6 @@ export default class Fetch extends Peer {
             && this.queue.length > 0) {
             let task = this.queue.shift();
             task();
-            this.next();
         }
     }
 
@@ -195,7 +197,7 @@ export default class Fetch extends Peer {
             if (this.connection.iceConnectionState == 'new') {
                 this.sendOffer();
             }
-            let that = this;
+
             let task = () => {
                 return this.sendRequestMessage(part).then(seq => {
                     this.emitter.once(`${seq}`, function (err, buf) {
@@ -212,6 +214,14 @@ export default class Fetch extends Peer {
             this.next();
         });
 
-        return timeCounter(fetcher, timeout);
+        let counter = timeCounter(fetcher, timeout);
+
+        return counter.then(buf => {
+            this.next();
+            return buf;
+        }, err => {
+            this.next();
+            throw err;
+        })
     }
 }
