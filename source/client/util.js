@@ -1,6 +1,5 @@
-
 import md5 from 'js-md5'
-import { getTime } from 'date-fns'
+import getTime from 'date-fns/get_time'
 
 export const chunkBuffer = (buf, chunkSize) => {
     let result = [];
@@ -32,4 +31,14 @@ export const MD5Buffer = buf => {
 
 export const MD5Now = (id, part) => {
     return md5(getTime(new Date()) + id + part);
+}
+
+export const filename = url => {
+    if (url) {
+        var m = url.toString().match(/.*\/(.+?)\./);
+        if (m && m.length > 1) {
+            return m[1];
+        }
+    }
+    return "";
 }

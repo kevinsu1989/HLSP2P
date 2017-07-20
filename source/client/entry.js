@@ -1,4 +1,3 @@
-import DataBox from './databox'
 import uri from 'urijs'
 import co from 'co'
 import { take } from 'lodash'
@@ -6,14 +5,14 @@ import { Parser } from 'm3u8-parser'
 
 (function () {
     let videoId = '123';
-    let url = 'http://pcvideoyf.titan.mgtv.com/c1/2017/07/18_0/1D543C9B67F98D8B8D49FB7E7B01A6EC_20170718_1_1_426_mp4/9B402FA3FE47063447AB09EF17356453.m3u8?pm=f2fM1Y9uj5eaHKgUgcjHGTURXhI8RmoRCXPK9VCv8pm6IOmUnVQ_nox493oj4aNRsej~Kv5eSb~1AWQMftbxf6td_B8V5k~t~AW8p5OAufog6D_XjQW~9c0ZwkVOFDuRdbu79m5Tvw3YTi2Rspi1RYdz0JVF6NhIVpzRFYGfQxdokVrtpGFx8J9XDLREsjFYnO5Tkg9SZffkj2l4G~t4bMGZnfrez2cVSyNNczo8KV9qyPEc6BEYIklRBwMGAMNnDdhisxbIp_lnnNkIZaZ57JjCZYFfCERKgGgTKfiiugU1Cqv8TlD28wvLVcCDmkE7C9YrZuDEmgRTUE84VmOWPlrbjPsx6rFfc5xkU4tiBcU-&arange=0';
+    let url = 'http://pcvideogs.titan.mgtv.com/c1/2017/07/19_0/2DB406E014BB4884CE93F749E8605AF1_20170719_1_1_314_mp4/89CE23C9522D06BD927B1BA1573B8D71.m3u8?pm=Ml4OxwI7Sg0JAqqFLx8SY9fSvjswpOYlsDHTKPyyFzTqyVlKg31oSel~j8QYba2uAIMOs9h39BBYE3XFSQeqM3r0Tt1sosRHze_BJrlEO_SmdJuebt8gx2vKTPtvDcyEbPUJuwzGB7kz~efuJhID4eL_pSumni5wcZ1hMeHdPxFgS3OpXKfgC2b0mg3q4TwZSPkC1FjOcOpAMoNSjv3vZIsaYf77ba5iZwxCfn~X5fGIMdZ4hX8dHERiUJLNGIetDSeGeBFWzxH1uaAsoaorJ_0od7~iYKTM6gIEbOHgEbL9IDLPxcUDUte8yjIP~PKCOA9TrWiKw~TJtYGHz38TRk9POeMiznkHTYilrb4Ghfo-&arange=0';
 
     let video = document.getElementById('video');
-    let databox = new DataBox('/', videoId);
+    let databox = new fetchSource('/', videoId);
     // let source = new MediaSource('video/mp2t; codecs="avc1.42E01E"');
     // video.src = URL.createObjectURL(source);
 
-    const fetchSource = (path) => {
+    const getSource = (path) => {
         let m3u8 = new uri(url);
         let ts = new uri(path);
 
@@ -38,7 +37,7 @@ import { Parser } from 'm3u8-parser'
             // })
             return co(function* () {
                 for (let segment of take(m3u8.segments, 10)) {
-                    let buf = yield fetchSource(segment.uri);
+                    let buf = yield getSource(segment.uri);
                     // source.addSourceBuffer(new Uint8Array(buf));
                 }
             })

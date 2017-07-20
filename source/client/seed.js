@@ -52,7 +52,7 @@ export default class Seed {
     }
 
     updatePart(id, part) {
-        let seed = find(this.seeds, ['id', id]);
+        let seed = find(this.seeds, seed => seed.id == id);
         seed.parts.push(part);
     }
 

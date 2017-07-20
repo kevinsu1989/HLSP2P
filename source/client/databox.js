@@ -1,5 +1,5 @@
 import Seed from './seed'
-import uri from 'urijs'
+import { filename } from './util'
 import { defaults } from 'lodash'
 import { isWebRTCSupported } from 'detectrtc'
 import { logInfo, logError } from './debugger'
@@ -63,7 +63,7 @@ export default class DataBox {
     }
 
     partName(video, url, range = '') {
-        let filename = new uri(url).filename();
-        return video + ':' + filename + ':' + range;
+        let name = filename(url);
+        return video + ':' + name + ':' + range;
     }
 }

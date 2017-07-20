@@ -1,5 +1,5 @@
 
-import io from 'socket.io-client'
+import io from 'socket.io-client/dist/socket.io.slim'
 import { logInfo } from './debugger'
 import { EventEmitter2 } from 'eventemitter2'
 

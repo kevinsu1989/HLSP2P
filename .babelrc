@@ -3,6 +3,10 @@
         "es2015",
         "stage-0"
     ],
+    "plugins": [
+        "lodash",
+        "transform-runtime"
+    ],
     "sourceMaps": true,
     "retainLines": true
 }

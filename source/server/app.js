@@ -16,9 +16,10 @@ const server = http.createServer(app);
 const socket = io(server);
 
 useIO(socket);
-renderPage(app);
+// renderPage(app);
 
-app.use(express.static(join(__dirname, '../../resource')));
+app.use(express.static(join(__dirname,'../../pub')));
+app.use(express.static(join(__dirname,'../../dist')));
 
 server.listen(5000, () => {
     console.log('server is run');
